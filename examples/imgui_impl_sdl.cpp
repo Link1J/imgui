@@ -57,6 +57,10 @@
 #if defined(__APPLE__)
 #include "TargetConditionals.h"
 #endif
+#if defined(_WIN32)
+#include <dwmapi.h>
+#pragma comment(lib, "Dwmapi.lib")
+#endif
 
 #define SDL_HAS_CAPTURE_AND_GLOBAL_MOUSE    SDL_VERSION_ATLEAST(2,0,4)
 #define SDL_HAS_WINDOW_ALPHA                SDL_VERSION_ATLEAST(2,0,5)
@@ -170,6 +174,7 @@ static bool ImGui_ImplSDL2_Init(SDL_Window* window, void* sdl_gl_context)
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;       // We can honor GetMouseCursor() values (optional)
 #if SDL_HAS_CAPTURE_AND_GLOBAL_MOUSE
     io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;  // We can create multi-viewports on the Platform side (optional)
+    io.BackendFlags |= ImGuiBackendFlags_PlatformViewportsAreTransparent; // We create transparent viewports on the Platform side (optional)
 #endif
     io.BackendPlatformName = "imgui_impl_sdl";
 
@@ -506,6 +511,7 @@ static void ImGui_ImplSDL2_CreateWindow(ImGuiViewport* viewport)
     {
         backup_context = SDL_GL_GetCurrentContext();
         SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
+        SDL_GL_SetAttribute(SDL_GL_ALPHA_SIZE, 8);
         SDL_GL_MakeCurrent(main_viewport_data->Window, main_viewport_data->GLContext);
     }
 
@@ -537,7 +543,23 @@ static void ImGui_ImplSDL2_CreateWindow(ImGuiViewport* viewport)
     SDL_SysWMinfo info;
     SDL_VERSION(&info.version);
     if (SDL_GetWindowWMInfo(data->Window, &info))
+    {
         viewport->PlatformHandleRaw = info.info.win.window;
+
+        BOOL dwm_enabled = FALSE;
+        DwmIsCompositionEnabled(&dwm_enabled);
+        if (dwm_enabled)
+        {
+            DWM_BLURBEHIND bb = { 0 };
+            HRGN region = CreateRectRgn(0, 0, -1, -1);
+
+            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+            bb.fEnable = true;
+            bb.hRgnBlur = region;
+
+            DwmEnableBlurBehindWindow(info.info.win.window, &bb);
+        }
+    }
 #endif
 }
 

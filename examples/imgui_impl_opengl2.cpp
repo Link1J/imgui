@@ -40,6 +40,11 @@
 #include <stdint.h>     // intptr_t
 #endif
 
+#ifdef _WIN32
+#include <Windows.h>
+#include <wingdi.h>
+#endif
+
 // Include OpenGL header (without an OpenGL loader) requires a bit of fiddling
 #if defined(_WIN32) && !defined(APIENTRY)
 #define APIENTRY __stdcall                  // It is customary to use APIENTRY for OpenGL function pointer declarations on all platforms.  Additionally, the Windows OpenGL header needs APIENTRY.
@@ -50,6 +55,12 @@
 #if defined(__APPLE__)
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
+#elif defined(_WIN32)
+#include <GL/gl.h>
+typedef void (APIENTRY *PFNGLBLENDFUNCSEPARATEPROC)(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
+typedef void (APIENTRY *PFNGLBLENDEQUATIONPROC)(GLenum mode);
+PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate = NULL;
+PFNGLBLENDEQUATIONPROC glBlendEquation = NULL;
 #else
 #include <GL/gl.h>
 #endif
@@ -68,6 +79,14 @@ bool    ImGui_ImplOpenGL2_Init()
     ImGuiIO& io = ImGui::GetIO();
     io.BackendRendererName = "imgui_impl_opengl2";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;    // We can create multi-viewports on the Renderer side (optional)
+
+#ifdef _WIN32
+    glBlendEquation = (PFNGLBLENDEQUATIONPROC)wglGetProcAddress("glBlendEquation");
+    glBlendFuncSeparate = (PFNGLBLENDFUNCSEPARATEPROC)wglGetProcAddress("glBlendFuncSeparate");
+#endif
+
+    if (glBlendEquation && glBlendFuncSeparate)
+        io.BackendFlags |= ImGuiBackendFlags_RendererViewportsAreTransparent; // We can handle transparent viewports on the Renderer side (optional)
 
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
         ImGui_ImplOpenGL2_InitPlatformInterface();
@@ -90,7 +109,18 @@ static void ImGui_ImplOpenGL2_SetupRenderState(ImDrawData* draw_data, int fb_wid
 {
     // Setup render state: alpha-blending enabled, no face culling, no depth testing, scissor enabled, vertex/texcoord/color pointers, polygon fill.
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.BackendFlags & ImGuiBackendFlags_PlatformViewportsAreTransparent && glBlendEquation && glBlendFuncSeparate)
+    {
+        glBlendEquation(0x8006 /*GL_FUNC_ADD*/);
+        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    }
+    else
+    {
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    }
+
     glDisable(GL_CULL_FACE);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_LIGHTING);
@@ -268,7 +298,7 @@ static void ImGui_ImplOpenGL2_RenderWindow(ImGuiViewport* viewport, void*)
 {
     if (!(viewport->Flags & ImGuiViewportFlags_NoRendererClear))
     {
-        ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+        ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
         glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
         glClear(GL_COLOR_BUFFER_BIT);
     }

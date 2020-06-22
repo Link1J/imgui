@@ -16,6 +16,11 @@
 #include <windows.h>
 #include <tchar.h>
 
+#if _WIN32_WINNT >= 0x0600
+#include <dwmapi.h>
+#pragma comment(lib, "Dwmapi.lib")
+#endif
+
 // Using XInput library for gamepad (with recent Windows SDK this may leads to executables which won't run on Windows 7)
 #ifndef IMGUI_IMPL_WIN32_DISABLE_GAMEPAD
 #include <XInput.h>
@@ -82,6 +87,9 @@ bool    ImGui_ImplWin32_Init(void* hwnd)
     io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;          // We can honor io.WantSetMousePos requests (optional, rarely used)
     io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;    // We can create multi-viewports on the Platform side (optional)
     io.BackendFlags |= ImGuiBackendFlags_HasMouseHoveredViewport; // We can set io.MouseHoveredViewport correctly (optional, not easy)
+#if _WIN32_WINNT >= 0x0600
+    io.BackendFlags |= ImGuiBackendFlags_PlatformViewportsAreTransparent; // We create transparent viewports on the Platform side (optional)
+#endif
     io.BackendPlatformName = "imgui_impl_win32";
 
     // Our mouse update function expect PlatformHandle to be filled for the main viewport
@@ -614,6 +622,26 @@ static void ImGui_ImplWin32_CreateWindow(ImGuiViewport* viewport)
         data->DwExStyle, _T("ImGui Platform"), _T("Untitled"), data->DwStyle,   // Style, class name, window name
         rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,    // Window area
         parent_window, NULL, ::GetModuleHandle(NULL), NULL);                    // Parent window, Menu, Instance, Param
+
+#if _WIN32_WINNT >= 0x0600 
+    if (io.ConfigFlags & ImGuiBackendFlags_RendererViewportsAreTransparent)
+    {
+        BOOL dwm_enabled = FALSE;
+        DwmIsCompositionEnabled(&dwm_enabled);
+        if (dwm_enabled)
+        {
+            DWM_BLURBEHIND bb = { 0 };
+            HRGN region = CreateRectRgn(0, 0, -1, -1);
+
+            bb.dwFlags = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+            bb.fEnable = true;
+            bb.hRgnBlur = region;
+
+            DwmEnableBlurBehindWindow(data->Hwnd, &bb);
+        }
+    }
+#endif
+
     data->HwndOwned = true;
     viewport->PlatformRequestResize = false;
     viewport->PlatformHandle = viewport->PlatformHandleRaw = data->Hwnd;
