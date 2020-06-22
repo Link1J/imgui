@@ -72,9 +72,13 @@ static void ImGui_ImplDX9_SetupRenderState(ImDrawData* draw_data)
     g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
     g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
     g_pd3dDevice->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
+    g_pd3dDevice->SetRenderState(D3DRS_SEPARATEALPHABLENDENABLE, TRUE);
     g_pd3dDevice->SetRenderState(D3DRS_BLENDOP, D3DBLENDOP_ADD);
     g_pd3dDevice->SetRenderState(D3DRS_SRCBLEND, D3DBLEND_SRCALPHA);
     g_pd3dDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
+    g_pd3dDevice->SetRenderState(D3DRS_BLENDOPALPHA, D3DBLENDOP_ADD);
+    g_pd3dDevice->SetRenderState(D3DRS_SRCBLENDALPHA, D3DBLEND_ONE);
+    g_pd3dDevice->SetRenderState(D3DRS_DESTBLENDALPHA, D3DBLEND_INVSRCALPHA);
     g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, TRUE);
     g_pd3dDevice->SetRenderState(D3DRS_SHADEMODE, D3DSHADE_GOURAUD);
     g_pd3dDevice->SetRenderState(D3DRS_FOGENABLE, FALSE);
@@ -236,6 +240,7 @@ bool ImGui_ImplDX9_Init(IDirect3DDevice9* device)
     io.BackendRendererName = "imgui_impl_dx9";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
     io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;  // We can create multi-viewports on the Renderer side (optional)
+    io.BackendFlags |= ImGuiBackendFlags_RendererViewportsAreTransparent;  // We create transparent viewports on the Renderer side (optional)
 
     g_pd3dDevice = device;
     g_pd3dDevice->AddRef();
@@ -335,7 +340,7 @@ static void ImGui_ImplDX9_CreateWindow(ImGuiViewport* viewport)
     data->d3dpp.SwapEffect = D3DSWAPEFFECT_DISCARD;
     data->d3dpp.BackBufferWidth = (UINT)viewport->Size.x;
     data->d3dpp.BackBufferHeight = (UINT)viewport->Size.y;
-    data->d3dpp.BackBufferFormat = D3DFMT_UNKNOWN;
+    data->d3dpp.BackBufferFormat = D3DFMT_A8R8G8B8;
     data->d3dpp.hDeviceWindow = hwnd;
     data->d3dpp.EnableAutoDepthStencil = FALSE;
     data->d3dpp.AutoDepthStencilFormat = D3DFMT_D16;
@@ -377,7 +382,7 @@ static void ImGui_ImplDX9_SetWindowSize(ImGuiViewport* viewport, ImVec2 size)
 static void ImGui_ImplDX9_RenderWindow(ImGuiViewport* viewport, void*)
 {
     ImGuiViewportDataDx9* data = (ImGuiViewportDataDx9*)viewport->RendererUserData;
-    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 
     LPDIRECT3DSURFACE9 render_target = NULL;
     LPDIRECT3DSURFACE9 last_render_target = NULL;

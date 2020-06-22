@@ -5678,7 +5678,7 @@ void ImGui::RenderWindowDecorations(ImGuiWindow* window, const ImRect& title_bar
                     is_docking_transparent_payload = true;
 
             ImU32 bg_col = GetColorU32(GetWindowBgColorIdxFromFlags(flags));
-            if (window->ViewportOwned)
+            if (window->ViewportOwned && !((g.IO.BackendFlags & ImGuiBackendFlags_PlatformViewportsAreTransparent) && (g.IO.BackendFlags & ImGuiBackendFlags_RendererViewportsAreTransparent)))
             {
                 // No alpha
                 bg_col = (bg_col | IM_COL32_A_MASK);
@@ -6329,7 +6329,7 @@ bool ImGui::Begin(const char* name, bool* p_open, ImGuiWindowFlags flags)
 
         // Lock window rounding for the frame (so that altering them doesn't cause inconsistencies)
         // Large values tend to lead to variety of artifacts and are not recommended.
-        if (window->ViewportOwned || window->DockIsActive)
+        if ((window->ViewportOwned && !((g.IO.BackendFlags & ImGuiBackendFlags_PlatformViewportsAreTransparent) && (g.IO.BackendFlags & ImGuiBackendFlags_RendererViewportsAreTransparent))) || window->DockIsActive)
             window->WindowRounding = 0.0f;
         else
             window->WindowRounding = (flags & ImGuiWindowFlags_ChildWindow) ? style.ChildRounding : ((flags & ImGuiWindowFlags_Popup) && !(flags & ImGuiWindowFlags_Modal)) ? style.PopupRounding : style.WindowRounding;
