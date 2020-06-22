@@ -474,6 +474,9 @@ void ImGui::ShowDemoWindow(bool* p_open)
             ImGui::CheckboxFlags("io.BackendFlags: HasMouseHoveredViewport", (unsigned int *)&backend_flags, ImGuiBackendFlags_HasMouseHoveredViewport);
             ImGui::CheckboxFlags("io.BackendFlags: RendererHasVtxOffset", (unsigned int *)&backend_flags, ImGuiBackendFlags_RendererHasVtxOffset);
             ImGui::CheckboxFlags("io.BackendFlags: RendererHasViewports", (unsigned int *)&backend_flags, ImGuiBackendFlags_RendererHasViewports);
+            ImGui::CheckboxFlags("io.BackendFlags: PlatformViewportsAreTransparent", (unsigned int*)&backend_flags, ImGuiBackendFlags_PlatformViewportsAreTransparent);
+            ImGui::CheckboxFlags("io.BackendFlags: RendererViewportsAreTransparent", (unsigned int*)&backend_flags, ImGuiBackendFlags_RendererViewportsAreTransparent);
+
             ImGui::TreePop();
             ImGui::Separator();
         }

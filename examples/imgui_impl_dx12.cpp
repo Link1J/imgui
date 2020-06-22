@@ -38,6 +38,13 @@
 #pragma comment(lib, "d3dcompiler") // Automatically link with d3dcompiler.lib as we are using D3DCompile() below.
 #endif
 
+#if _WIN32_WINNT >= 0x0602 
+#include <dcomp.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "Dcomp") // Automatically link with d3dcompiler.lib as we are using D3DCompile() below.
+#endif
+#endif
+
 // DirectX data
 static ID3D12Device*                g_pd3dDevice = NULL;
 static ID3D12RootSignature*         g_pRootSignature = NULL;
@@ -48,6 +55,9 @@ static D3D12_CPU_DESCRIPTOR_HANDLE  g_hFontSrvCpuDescHandle = {};
 static D3D12_GPU_DESCRIPTOR_HANDLE  g_hFontSrvGpuDescHandle = {};
 static ID3D12DescriptorHeap*        g_pd3dSrvDescHeap = NULL;
 static UINT                         g_numFramesInFlight = 0;
+#if _WIN32_WINNT >= 0x0602 
+static IDCompositionDevice*         g_pdcompDevice = NULL;
+#endif
 
 struct FrameResources
 {
@@ -80,6 +90,10 @@ struct ImGuiViewportDataDx12
     FrameContext*               FrameCtx;
     FrameResources*             Resources;
 
+#if _WIN32_WINNT >= 0x0602 
+    IDCompositionTarget*        Target;
+#endif
+
     ImGuiViewportDataDx12()
     {
         CommandQueue = NULL;
@@ -93,6 +107,10 @@ struct ImGuiViewportDataDx12
         FrameIndex = UINT_MAX;
         FrameCtx = new FrameContext[g_numFramesInFlight];
         Resources = new FrameResources[g_numFramesInFlight];
+
+#if _WIN32_WINNT >= 0x0602 
+        Target = NULL;
+#endif
 
         for (UINT i = 0; i < g_numFramesInFlight; ++i)
         {
@@ -113,6 +131,10 @@ struct ImGuiViewportDataDx12
         IM_ASSERT(SwapChain == NULL);
         IM_ASSERT(Fence == NULL);
         IM_ASSERT(FenceEvent == NULL);
+
+#if _WIN32_WINNT >= 0x0602 
+        IM_ASSERT(Target == NULL);
+#endif
 
         for (UINT i = 0; i < g_numFramesInFlight; ++i)
         {
@@ -624,8 +646,8 @@ bool    ImGui_ImplDX12_CreateDeviceObjects()
         desc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
         desc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
         desc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-        desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-        desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+        desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+        desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
         desc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
         desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     }
@@ -690,6 +712,9 @@ bool ImGui_ImplDX12_Init(ID3D12Device* device, int num_frames_in_flight, DXGI_FO
     io.BackendRendererName = "imgui_impl_dx12";
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
     io.BackendFlags |= ImGuiBackendFlags_RendererHasViewports;  // We can create multi-viewports on the Renderer side (optional) // FIXME-VIEWPORT: Actually unfinished..
+#if _WIN32_WINNT >= 0x0602 
+    io.BackendFlags |= ImGuiBackendFlags_RendererViewportsAreTransparent;  // We create transparent viewports on the Renderer side (optional)
+#endif
 
     g_pd3dDevice = device;
     g_RTVFormat = rtv_format;
@@ -697,6 +722,12 @@ bool ImGui_ImplDX12_Init(ID3D12Device* device, int num_frames_in_flight, DXGI_FO
     g_hFontSrvGpuDescHandle = font_srv_gpu_desc_handle;
     g_numFramesInFlight = num_frames_in_flight;
     g_pd3dSrvDescHeap = cbv_srv_heap;
+
+#if _WIN32_WINNT >= 0x0602 
+    HRESULT res = S_OK;
+    res = DCompositionCreateDevice(NULL, IID_PPV_ARGS(&g_pdcompDevice));
+    IM_ASSERT(res == S_OK);
+#endif
 
     ImGuiViewport* main_viewport = ImGui::GetMainViewport();
     main_viewport->RendererUserData = IM_NEW(ImGuiViewportDataDx12)();
@@ -713,6 +744,9 @@ void ImGui_ImplDX12_Shutdown()
 {
     ImGui_ImplDX12_ShutdownPlatformInterface();
     ImGui_ImplDX12_InvalidateDeviceObjects();
+
+    g_pdcompDevice->Release();
+    g_pdcompDevice = NULL;
 
     g_pd3dDevice = NULL;
     g_hFontSrvCpuDescHandle.ptr = 0;
@@ -790,7 +824,7 @@ static void ImGui_ImplDX12_CreateWindow(ImGuiViewport* viewport)
     sd1.SampleDesc.Count = 1;
     sd1.SampleDesc.Quality = 0;
     sd1.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    sd1.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
+    sd1.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
     sd1.Scaling = DXGI_SCALING_STRETCH;
     sd1.Stereo = FALSE;
 
@@ -799,8 +833,29 @@ static void ImGui_ImplDX12_CreateWindow(ImGuiViewport* viewport)
     IM_ASSERT(res == S_OK);
 
     IDXGISwapChain1* swap_chain = NULL;
+
+#if _WIN32_WINNT >= 0x0602 
+    res = dxgi_factory->CreateSwapChainForComposition(data->CommandQueue, &sd1, NULL, &swap_chain);
+    IM_ASSERT(res == S_OK);
+
+    res = g_pdcompDevice->CreateTargetForHwnd(hwnd, TRUE, &data->Target);
+    IM_ASSERT(res == S_OK);
+
+    IDCompositionVisual* visual = NULL;
+    res = g_pdcompDevice->CreateVisual(&visual);
+    IM_ASSERT(res == S_OK);
+    res = visual->SetContent(swap_chain);
+    IM_ASSERT(res == S_OK);
+    res = data->Target->SetRoot(visual);
+    IM_ASSERT(res == S_OK);
+    res = g_pdcompDevice->Commit();
+    IM_ASSERT(res == S_OK);
+
+    visual->Release();
+#else
     res = dxgi_factory->CreateSwapChainForHwnd(data->CommandQueue, hwnd, &sd1, NULL, NULL, &swap_chain);
     IM_ASSERT(res == S_OK);
+#endif
 
     dxgi_factory->Release();
 
@@ -875,6 +930,10 @@ static void ImGui_ImplDX12_DestroyWindow(ImGuiViewport* viewport)
         ::CloseHandle(data->FenceEvent);
         data->FenceEvent = NULL;
 
+#if _WIN32_WINNT >= 0x0602 
+        SafeRelease(data->Target);
+#endif
+
         for (UINT i = 0; i < g_numFramesInFlight; i++)
         {
             SafeRelease(data->FrameCtx[i].RenderTarget);
@@ -916,7 +975,7 @@ static void ImGui_ImplDX12_RenderWindow(ImGuiViewport* viewport, void*)
     FrameContext* frame_context = &data->FrameCtx[data->FrameIndex % g_numFramesInFlight];
     UINT back_buffer_idx = data->SwapChain->GetCurrentBackBufferIndex();
 
-    const ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 1.0f);
+    const ImVec4 clear_color = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
     D3D12_RESOURCE_BARRIER barrier = {};
     barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
