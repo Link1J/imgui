@@ -59,8 +59,8 @@
 #include <GL/gl.h>
 typedef void (APIENTRY *PFNGLBLENDFUNCSEPARATEPROC)(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
 typedef void (APIENTRY *PFNGLBLENDEQUATIONPROC)(GLenum mode);
-#if defined(_WIN32)
 PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate = NULL;
+#if defined(_WIN32)
 PFNGLBLENDEQUATIONPROC glBlendEquation = NULL;
 #endif
 #endif
