@@ -55,6 +55,12 @@
 #if defined(__APPLE__)
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
+#elif defined(_WIN32)
+#include <GL/gl.h>
+typedef void (APIENTRY *PFNGLBLENDFUNCSEPARATEPROC)(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
+typedef void (APIENTRY *PFNGLBLENDEQUATIONPROC)(GLenum mode);
+PFNGLBLENDFUNCSEPARATEPROC glBlendFuncSeparate = NULL;
+PFNGLBLENDEQUATIONPROC glBlendEquation = NULL;
 #else
 #include <GL/gl.h>
 typedef void (APIENTRY *PFNGLBLENDFUNCSEPARATEPROC)(GLenum sfactorRGB, GLenum dfactorRGB, GLenum sfactorAlpha, GLenum dfactorAlpha);
